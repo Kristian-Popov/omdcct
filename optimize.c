@@ -6,7 +6,7 @@
         Implementation of Shabal is taken from:
         http://www.shabal.com/?p=198
 
-        Usage: ./merge <input file>
+        Usage: ./optimize [-m MEMORY] [-o OUTPUT_DIR] <Plot file> [<Plot file> ..]
 */
 
 #define _GNU_SOURCE
@@ -29,18 +29,40 @@
 #define SCOOP_SIZE      64
 #define PLOTSIZE        262144
 
-int optimizeFile(char *filename, unsigned long long memory) {
+/* Optimize a file.
+ * Paramters:
+ * 		filename - file name
+ * 		memory - RAM space to use
+ * 		outputdir - output directory for files. If NULL, output file will be stored
+ * 			in the same directory with an input file.
+ * 			If given, output file will be stored there. This buffer should be allocated by malloc()
+ * 			(this memory will be freed)
+ */ 
+int optimizeFile(char *filename, unsigned long long memory, char* outputdir) {
 	// find last '/' in path
 	char *lastslash = strrchr(filename, '/');
 	char *dir = NULL;
+	if (NULL != outputdir)
+	{
+		dir = (char*)malloc(FILE_PATH_LEN);
+		if (NULL == outputdir)
+		{
+			printf("calloc failed while allocating space for output directory name buffer, line %d\n", __LINE__);
+			return -1;
+		}
+		strncpy(dir, outputdir, FILE_PATH_LEN);
+	}
 
 	// No path: use filename
 	if(lastslash == NULL)
 		lastslash = filename;
-	else {
+	else if (NULL == dir){
 		dir = (char*)malloc(lastslash - filename + 1);
 		memcpy(dir, filename, lastslash - filename);
 		dir[lastslash - filename] = 0;
+		lastslash++;
+	}
+	else { // Input files are not located in current directory and output directory is given
 		lastslash++;
 	}
 
@@ -134,9 +156,9 @@ int optimizeFile(char *filename, unsigned long long memory) {
 	}
 #else
 	if(dir == NULL) {
-		byteswritten = snprintf(outputfile, "%llu_%llu_%llu_%llu", key, startnonce, nonces, nonces);
+		byteswritten = snprintf(outputfile, FILE_PATH_LEN, "%llu_%llu_%llu_%llu", key, startnonce, nonces, nonces);
 	} else {
-		byteswritten = snprintf(outputfile, "%s/%llu_%llu_%llu_%llu", dir, key, startnonce, nonces, nonces);
+		byteswritten = snprintf(outputfile, FILE_PATH_LEN, "%s/%llu_%llu_%llu_%llu", dir, key, startnonce, nonces, nonces);
 	}
 #endif
 	if(byteswritten >= FILE_PATH_LEN) {
@@ -222,7 +244,7 @@ int optimizeFile(char *filename, unsigned long long memory) {
 
 int main(int argc, char **argv) {
         if(argc < 2) {
-                printf("Usage: ./optimize [-m MEMORY] <Plot file> [<Plot file> ..]\n");
+                printf("Usage: ./optimize [-m MEMORY] [-o OUTPUT_DIR] <Plot file> [<Plot file> ..]\n");
                 exit(-1);
         }
 
@@ -235,6 +257,7 @@ int main(int argc, char **argv) {
 
 	char **files = (char**)malloc( sizeof(char*) * argc);
 	int nfiles = 0;
+	char* outputdir = NULL;
 
 	int finished = 0;
 	for(file = 1; file < argc; file++) {
@@ -267,6 +290,24 @@ int main(int argc, char **argv) {
 							memory *= 1000;
 					}
 				}
+			} else if(argv[file][1] == 'o') {
+				char *parse = NULL;
+				if(argv[file][2] == '\0') {
+					if(file < argc - 1) 
+						parse = argv[++file];
+				} else {
+					parse = &(argv[file][2]);
+				}
+
+				if(parse != NULL) {
+					outputdir = (char*)malloc(FILE_PATH_LEN);
+					if (NULL == outputdir)
+					{
+						printf("calloc failed while allocating space for output directory name buffer, line %d\n", __LINE__);
+						return EXIT_FAILURE;
+					}
+					strncpy(outputdir, parse, FILE_PATH_LEN);
+				}
 			}
 		} else {
 			files[nfiles++] = argv[file];
@@ -274,11 +315,17 @@ int main(int argc, char **argv) {
 	}
 
 	for(file = 0; file < nfiles; file++) {
-		if(optimizeFile(files[file], memory) == 0) {
-			printf("Replacing plot file\n");
-			unlink(files[file]);		
+		if(optimizeFile(files[file], memory, outputdir) == 0) {
+			printf("File \'%s\' was successfully optimized\n", files[file]);
+			//printf("Replacing plot file\n");
+			//unlink(files[file]);
 		}
-	}	
+	}
+
+	if (NULL != outputdir)
+	{
+		free(outputdir);
+	}
 
 	return 0;
 }
