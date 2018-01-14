@@ -22,6 +22,9 @@
 #include "helper.h"
 #endif
 
+// Max length of a file path this app supports (including terminating zero)
+#define FILE_PATH_LEN 1024
+
 // These are fixed. Do not change!
 #define SCOOP_SIZE      64
 #define PLOTSIZE        262144
@@ -120,21 +123,26 @@ int optimizeFile(char *filename, unsigned long long memory) {
 #endif
 	
 	// Open output file
-	char outputfile[100];   // Should be plenty
+	char outputfile[FILE_PATH_LEN];
+	int byteswritten = 0;
 
 #ifdef _WIN32
 	if(dir == NULL) {
-		sprintf(outputfile, "%I64u_%I64u_%I64u_%I64u", key, startnonce, nonces, nonces);
+		byteswritten = snprintf(outputfile, FILE_PATH_LEN, "%I64u_%I64u_%I64u_%I64u", key, startnonce, nonces, nonces);
 	} else {
-		sprintf(outputfile, "%s/%I64u_%I64u_%I64u_%I64u", dir, key, startnonce, nonces, nonces);
+		byteswritten = snprintf(outputfile, FILE_PATH_LEN, "%s/%I64u_%I64u_%I64u_%I64u", dir, key, startnonce, nonces, nonces);
 	}
 #else
 	if(dir == NULL) {
-		sprintf(outputfile, "%llu_%llu_%llu_%llu", key, startnonce, nonces, nonces);
+		byteswritten = snprintf(outputfile, "%llu_%llu_%llu_%llu", key, startnonce, nonces, nonces);
 	} else {
-		sprintf(outputfile, "%s/%llu_%llu_%llu_%llu", dir, key, startnonce, nonces, nonces);
+		byteswritten = snprintf(outputfile, "%s/%llu_%llu_%llu_%llu", dir, key, startnonce, nonces, nonces);
 	}
 #endif
+	if(byteswritten >= FILE_PATH_LEN) {
+		printf("Not enough free space in \'outputfile\' buffer. Either wait for a fix or move files to location with shorter path\n");
+		return -1;
+	}
 
 #ifdef _WIN32
 	int oh = open(outputfile, O_CREAT | _O_WRONLY | _O_BINARY, 0644);
